@@ -47,6 +47,9 @@ sub get {
     my $doc = Fetch::WithStatic::Doc->new($html, util => $util);
     $self->save_statics($doc->statics);
     $self->save($doc->as_HTML, $this, encode => 1);
+
+    say "Success!";
+    say "open '" . $this->stringify . "'";
 }
 
 sub save {
@@ -110,7 +113,7 @@ sub fetch {
             return $content;
         }
     } else {
-        croak "Fatal error: [" . $res->status_line . "] $url";
+        croak "Fatal error: [" . $res->status . "] $url";
     }
 }
 
