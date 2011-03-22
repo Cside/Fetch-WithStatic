@@ -2,27 +2,38 @@ package Fetch::WithStatic::Util;
 use strict;
 use warnings;
 use utf8;
-use Carp;
+use Carp qw/croak/;
 use Class::Accessor::Lite (
     rw => [ qw/savedir url/ ],
 );
-use FindBin;
 use File::HomeDir qw/my_home/;
 use Path::Class qw//;
 use URI;
+use Cwd;
 
 sub conf {
     my ($class, %opt) = @_;
     my $self = bless \%opt, $class;
-    croak "Need url."     unless $opt{url};
+    croak "Need url." unless $opt{url};
     croak "Invalid URL: $opt{url}" unless $opt{url} =~ m#^https?://#;
 
     my $savedir = $opt{savedir};
-    $savedir ||= $FindBin::Bin;
+
+    my $cr_dir = Cwd::getcwd;
+    $savedir ||= $cr_dir;
     my $home = File::HomeDir->my_home;
     $savedir =~ s#^~#$home#;
-    $self->savedir($savedir);
+    $savedir = Path::Class::dir($savedir);
 
+    if ($savedir->is_relative) {
+        $savedir = Path::Class::dir($cr_dir)->subdir($savedir);
+    }
+
+    unless (-d $savedir->stringify) {
+        croak "No such directory: " . $savedir->stringify;
+    }
+
+    $self->savedir($savedir);
     $self;
 }
 
@@ -76,14 +87,12 @@ sub path_to_local {
 
 sub this {
     my ($self) = @_;
-    Path::Class::dir( $self->savedir )
-    ->file( $self->filename_from_url($self->url) );
+   $self->savedir->file( $self->filename_from_url($self->url) );
 }
 
 sub file {
     my ($self, $path) = @_;
-    my $file = Path::Class::dir( $self->savedir )
-               ->file( $self->path_to_local($path) );
+    my $file = $self->savedir->file( $self->path_to_local($path) );
 
     my $dir = $file->dir;
     unless (-d $dir->stringify) {

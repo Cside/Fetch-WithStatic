@@ -7,6 +7,32 @@ use Fetch::WithStatic::Util;
 use File::HomeDir;
 use FindBin;
 use Path::Class;
+use Cwd;
+use File::Spec::Functions;
+
+subtest "savedir" => sub {
+    my $home = File::HomeDir->my_home;
+    my $cr_dir = Cwd::getcwd;
+    my $check_dir = sub {
+        my ($input, $expected) = @_;
+        local $Test::Builder::Level = $Test::Builder::Level + 1;
+        my $util = Fetch::WithStatic::Util->conf(
+            savedir => $input,
+            url => 'http://example.com/'
+        );
+        is $util->savedir->stringify, $expected;
+    };
+
+    $check_dir->('~', $home);
+    $check_dir->('.', catfile($cr_dir));
+    $check_dir->('..', catfile($cr_dir, '..'));
+    $check_dir->(undef, $cr_dir);
+    dies_ok {
+        $check_dir->('some_dir_doesnt_exists', $cr_dir);
+    };
+
+    done_testing;
+};
 
 subtest "croak_ok" => sub {
 
@@ -31,30 +57,6 @@ subtest "croak_ok" => sub {
     lives_ok {
         Fetch::WithStatic::Util->conf( savedir => '~/', url => 'https://example.com/' );
     };
-
-    done_testing;
-};
-
-subtest "savedir" => sub {
-    my $home = File::HomeDir->my_home;
-    my $util = Fetch::WithStatic::Util->conf(
-        savedir => '~',
-        url => 'http://example.com/'
-    );
-    is $util->savedir, $home;
-
-    # $util = Fetch::WithStatic::Util->conf(
-    #     savedir => '~/',
-    #     url => 'http://example.com/'
-    # );
-    # is $util->savedir, $home;
-
-    $util = Fetch::WithStatic::Util->conf(
-        savedir => '~/foo/bar',
-        url => 'http://example.com/'
-    );
-    is $util->savedir, File::HomeDir->my_home . '/foo/bar';
-    # TODO Win32
 
     done_testing;
 };
