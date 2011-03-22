@@ -1,0 +1,29 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use Path::Class;
+use lib file(__FILE__)->dir->parent->subdir('lib')->stringify;
+use Fetch::WithStatic;
+use Pod::Usage;
+use Getopt::Long;
+use Cwd;
+
+my $url = $ARGV[0];
+$url or pod2usage;
+
+my $dir = Cwd::getcwd;
+
+GetOptions(
+    "d|dir=s" => \$dir,
+);
+
+my $fetcher = Fetch::WithStatic->new;
+$fetcher->get($url, $dir);
+
+=head1 NAME
+
+fetch-static
+
+=head1 SYNOPSIS
+
+ $ fetch-static <URL>

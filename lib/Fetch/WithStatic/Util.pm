@@ -2,7 +2,7 @@ package Fetch::WithStatic::Util;
 use strict;
 use warnings;
 use utf8;
-use Carp qw/croak/;
+use Carp qw/croak carp/;
 use Class::Accessor::Lite (
     rw => [ qw/savedir url/ ],
 );
