@@ -16,6 +16,8 @@ requires 'Coro';
 requires 'Coro::LWP';
 requires 'Coro::Semaphore';
 requires 'Furl';
+requires 'Pod::Usage';
+requires 'Getopt::Long';
 
 tests 't/*.t';
 author_tests 'xt';
@@ -26,6 +28,8 @@ test_requires 'Fetch::WithStatic::Util';
 test_requires 'File::HomeDir';
 test_requires 'FindBin';
 test_requires 'Path::Class';
+
+install_script('bin/fetch-static');
 
 auto_set_repository;
 auto_include;
