@@ -36,6 +36,7 @@ sub get {
     my ($self, $url, $savedir) = @_;
 
     croak "Malformed URL: $url" unless $url =~ m#^https?://#;
+    $url .= '/' unless ($url =~ m#^https?://(.+)#)[0] =~ qr{/};
 
     my $util = Fetch::WithStatic::Util->conf(savedir => $savedir, url => $url);
 
