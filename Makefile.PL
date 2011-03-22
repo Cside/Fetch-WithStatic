@@ -4,7 +4,6 @@ all_from 'lib/Fetch/WithStatic.pm';
 
 # requires '';
 requires 'HTML::TreeBuilder::Select';
-requires 'List::MoreUtils';
 requires 'Class::Accessor::Lite';
 requires 'File::HomeDir';
 requires 'Path::Class';
@@ -18,6 +17,7 @@ requires 'Coro::Semaphore';
 requires 'Furl';
 requires 'Pod::Usage';
 requires 'Getopt::Long';
+requires 'List::MoreUtils';
 
 tests 't/*.t';
 author_tests 'xt';

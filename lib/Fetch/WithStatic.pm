@@ -10,7 +10,7 @@ use utf8;
 use Perl6::Say;
 use Carp qw/croak/;
 use Try::Tiny;
-
+use List::MoreUtils qw/uniq/;
 use Class::Accessor::Lite (
     rw => [ qw(furl encoder) ],
 );
@@ -66,15 +66,15 @@ sub save_statics {
 
     my @coro;
     my $semaphore = new Coro::Semaphore 30;
+    for my $url (uniq map { $_->{url} } @{$statics}) {
+        my $static = (grep { $url eq $_->{url} } @{$statics})[0];
+        my $filename = $static->{file}->basename;
+        my $content;
+        my $error = 0;
 
-    for my $static (@{$statics}) {
         push @coro, async {
-            my $content;
-            my $filename = $static->{file}->basename;
-            my $error = 0;
-
             try {
-                $content = $self->fetch($static->{url});
+                $content = $self->fetch($url);
             } catch {
                 say "Failed to get: $filename";
                 $error = 1;
@@ -90,7 +90,6 @@ sub save_statics {
             }
         };
     }
-
     $_->join for @coro;
 }
 

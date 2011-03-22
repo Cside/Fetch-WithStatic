@@ -7,7 +7,6 @@ use Class::Accessor::Lite (
     rw => [ qw/tree statics util/ ],
 );
 use HTML::TreeBuilder::Select;
-use List::MoreUtils qw/uniq/;
 
 sub new {
     my ($class, $html, %opt) = @_;
@@ -51,7 +50,7 @@ sub extract_statics {
         my @css;
         push @css, $tree->select('link[type="text/css"]');
         push @css, $tree->select('link[rel="stylesheet"]');
-        grep { $_ } uniq(@css);
+        grep { $_ } @css;
     };
     $push->($_, 'src')  for $tree->select('img');
     $push->($_, 'src')  for $tree->select('script[type="text/javascript"]');
