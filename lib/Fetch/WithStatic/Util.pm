@@ -1,14 +1,14 @@
 package Fetch::WithStatic::Util;
+use Mouse;
+use namespace::autoclean;
+use Smart::Args;
+
 use utf8;
 use Carp;
 use File::HomeDir qw/my_home/;
 use Path::Class;
 use File::Spec;
 use URI;
-
-use Mouse;
-use namespace::autoclean;
-use Smart::Args;
 
 use Fetch::WithStatic::Types qw/HTTP_URL BASENAME/;
 

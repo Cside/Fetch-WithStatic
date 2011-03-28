@@ -1,5 +1,8 @@
 package Fetch::WithStatic;
-our $VERSION = '0.03';
+use Mouse;
+use namespace::autoclean;
+use Smart::Args;
+
 use Encode;
 use utf8;
 use Carp;
@@ -9,9 +12,7 @@ use Fetch::WithStatic::Doc;
 use Fetch::WithStatic::Util;
 use Fetch::WithStatic::Fetcher;
 
-use Mouse;
-use namespace::autoclean;
-use Smart::Args;
+our $VERSION = '0.03';
 
 has silent => (
     is => 'rw',

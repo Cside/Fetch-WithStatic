@@ -1,4 +1,6 @@
 package Fetch::WithStatic::Fetcher;
+use strict;
+use warnings;
 use utf8;
 use Carp;
 use Try::Tiny;

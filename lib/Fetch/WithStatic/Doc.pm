@@ -1,15 +1,15 @@
 package Fetch::WithStatic::Doc;
+use Mouse;
+use namespace::autoclean;
+use MouseX::AttributeHelpers;
+use Smart::Args;
+
 use utf8;
 use Carp;
 use Encode;
 use Path::Class;
 use Try::Tiny;
 use HTML::TreeBuilder::Select;
-
-use Mouse;
-use namespace::autoclean;
-use MouseX::AttributeHelpers;
-use Smart::Args;
 
 use Fetch::WithStatic::Util;
 use Fetch::WithStatic::Types qw/HTTP_URL/;
