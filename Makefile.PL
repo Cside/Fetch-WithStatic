@@ -29,6 +29,7 @@ test_requires 'File::Find::Rule';
 test_requires 'File::HomeDir';
 test_requires 'HTML::TreeBuilder::Select';
 test_requires 'Test::Exception';
+test_requires 'Path::Class';
 
 install_script('bin/fetch-static');
 

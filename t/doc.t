@@ -4,6 +4,8 @@ use Test::Exception;
 use Fetch::WithStatic::Doc;
 
 my $url = "http://d.hatena.ne.jp/sugyan/20110313/1300025780";
+use Path::Class;
+use lib file(__FILE__)->dir->parent->subdir('lib')->stringify;
 #use LWP::Simple qw/get/;
 #my $content = get($url);
 #use Encode;
