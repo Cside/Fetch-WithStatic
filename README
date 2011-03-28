@@ -18,6 +18,27 @@ Then install it:
 
 DOCUMENTATION
 
+    use Fetch::WithStatic;
+
+    my $fetcher = Fetch::WithStatic->new;
+
+    # save to your current dir
+    $fetcher->get(
+        url => $url
+    );
+
+    # save to a optional dir
+    $fetcher->get(
+        url => $url,
+        dir => '/path/to/dir'
+    );
+
+    # view log
+    $fetcher->get(
+        url => $url,
+        sirent => 0,
+    );
+
 Fetch::WithStatic documentation is available as in POD. So you can do:
 
     % perldoc Fetch::WithStatic

@@ -1,8 +1,15 @@
 use strict;
-use Test::More tests => 3;
+use Test::More;
+use File::Find::Rule;
 
-BEGIN {
-    use_ok 'Fetch::WithStatic';
-    use_ok 'Fetch::WithStatic::Doc';
-    use_ok 'Fetch::WithStatic::Util';
-};
+my @files = File::Find::Rule->file->name('*.pm')->in('lib');
+plan tests => scalar @files;
+
+for (@files) {
+    s<^lib/><>;
+    s<\.pm$><>;
+    s</><::>g;
+    use_ok $_;
+}
+
+done_testing;

@@ -1,55 +1,74 @@
 package Fetch::WithStatic::Util;
-use strict;
-use warnings;
 use utf8;
-use Carp qw/croak carp/;
-use Class::Accessor::Lite (
-    rw => [ qw/savedir url/ ],
-);
+use Carp;
 use File::HomeDir qw/my_home/;
-use Path::Class qw//;
+use Path::Class;
+use File::Spec;
 use URI;
-use Cwd;
 
-sub conf {
-    my ($class, %opt) = @_;
-    my $self = bless \%opt, $class;
-    croak "Need url." unless $opt{url};
-    croak "Invalid URL: $opt{url}" unless $opt{url} =~ m#^https?://#;
+use Mouse;
+use namespace::autoclean;
+use Smart::Args;
 
-    my $savedir = $opt{savedir};
+use Fetch::WithStatic::Types qw/HTTP_URL BASENAME/;
 
-    my $cr_dir = Cwd::getcwd;
-    $savedir ||= $cr_dir;
+has url => (
+    is => 'rw',
+    isa => HTTP_URL,
+    required => 1,
+);
+
+has dir => (
+    is => 'rw',
+    required => 1,
+);
+
+has _dir => (
+    is => 'rw',
+    lazy_build => 1,
+);
+
+sub _build__dir {
+    my ($self) = @_;
+    my $dir = $self->dir || '.';
     my $home = File::HomeDir->my_home;
-    $savedir =~ s#^~#$home#;
-    $savedir = Path::Class::dir($savedir);
+    $dir =~ s/^~/$home/;
+    $dir = dir($dir);
+    my $dir_abs = $dir->absolute;
 
-    if ($savedir->is_relative) {
-        $savedir = Path::Class::dir($cr_dir)->subdir($savedir);
+    unless (-d $dir_abs->stringify) {
+        eval {
+            mkdir $dir_abs->stringify;
+        };
+        croak "Failed to make a new dir: " . $dir_abs->stringify if $@;
     }
-
-    unless (-d $savedir->stringify) {
-        croak "No such directory: " . $savedir->stringify;
-    }
-
-    $self->savedir($savedir);
-    $self;
+    $dir_abs;
 }
 
-sub filename_from_url {
-    my ($self, $url) = @_;
-    my $filename = do {
-        my @segments = URI->new($url)->path_segments; 
+# Public Methods
+
+sub url_to_basename {
+    args_pos my $self,
+             my $url => HTTP_URL;
+
+    my $basename = do {
+        my @segments = URI->new($url)->path_segments;
         pop @segments;
     };
-    $filename = 'index.html' if ! $filename;
-    $filename .= '.html' unless $filename =~ /\.(html|htm)$/;
-    $filename;
+    $basename = 'index.html' if ! $basename;
+    $basename .= '.html' unless $basename =~ /\.(html|htm)$/;
+    $basename;
 }
 
-sub url_from_filepath {
-    my ($self, $path) = @_;
+sub originpath_to_basename {
+    args_pos my $self,
+             my $path;
+    file($path)->basename;
+}
+
+sub originpath_to_url {
+    args_pos my $self,
+             my $path;
 
     my $url = $self->url;
 
@@ -78,30 +97,33 @@ sub url_from_filepath {
     }
 }
 
-sub path_to_local {
-    my ($self, $path) = @_;
-
-    my $path_on_html = 'static/' . ($self->url_from_filepath($path) =~ (m#https?://([^?]+)#))[0];
-    $path_on_html;
+sub originpath_to_localpath {
+    args_pos my $self,
+             my $path;
+    my $url = $self->originpath_to_url($path);
+    my @dir = split '/', ($url =~ (m#https?://([^?]+)#))[0];
+    File::Spec->catfile('static', @dir);
 }
 
-sub this {
-    my ($self) = @_;
-   $self->savedir->file( $self->filename_from_url($self->url) );
+
+sub basename_to_file {
+    args_pos my $self,
+             my $basename => BASENAME;
+    $self->_dir->file($basename);
 }
 
-sub file {
-    my ($self, $path) = @_;
-    my $file = $self->savedir->file( $self->path_to_local($path) );
-
+sub originpath_to_file {
+    args_pos my $self,
+             my $path;
+    my $localpath = $self->originpath_to_localpath($path);
+    my $file = $self->_dir->file($localpath);
     my $dir = $file->dir;
     unless (-d $dir->stringify) {
         eval {
             $dir->mkpath;
         };
     }
-    $file
+    $file;
 }
 
 1;
-

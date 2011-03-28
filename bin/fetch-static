@@ -6,19 +6,32 @@ use lib file(__FILE__)->dir->parent->subdir('lib')->stringify;
 use Fetch::WithStatic;
 use Pod::Usage;
 use Getopt::Long;
-use Cwd;
+use Try::Tiny;
 
 my $url = $ARGV[0];
 $url or pod2usage;
 
-my $dir = Cwd::getcwd;
+my $dir;
 
 GetOptions(
     "d|dir=s" => \$dir,
 );
 
 my $fetcher = Fetch::WithStatic->new;
-$fetcher->get($url, $dir);
+
+try {
+    $fetcher->get(
+        url => $url,
+        dir => $dir,
+        silent => 0,
+    );
+} catch {
+    if ($_ =~ /^'url':/) {
+        pod2usage;
+    } else {
+        print $_, "\n";
+    }
+}
 
 =head1 NAME
 
@@ -27,3 +40,5 @@ fetch-static
 =head1 SYNOPSIS
 
  $ fetch-static <URL>
+
+ $ fetch-static <URL> --dir=/path/to/dir

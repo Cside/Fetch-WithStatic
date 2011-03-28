@@ -1,119 +1,121 @@
 package Fetch::WithStatic;
-use strict;
-use warnings;
-our $VERSION = '0.01';
-
+our $VERSION = '0.03';
 use Encode;
-use Encode::Guess qw/ascii utf8 euc-jp shiftjis 7bit-jis/;
 use utf8;
-
-use Perl6::Say;
-use Carp qw/croak/;
+use Carp;
 use Try::Tiny;
-use List::MoreUtils qw/uniq/;
-use Class::Accessor::Lite (
-    rw => [ qw(furl encoder) ],
-);
-use Coro;
-use Coro::LWP;
-use Coro::Semaphore;
-use Furl;
 
 use Fetch::WithStatic::Doc;
 use Fetch::WithStatic::Util;
+use Fetch::WithStatic::Fetcher;
 
-sub new {
-    my $furl = Furl->new(
-        agent => "Fetch::WithStatic/$VERSION ",
-        timeout => 30,
-        max_redirect => 0,
-    );
+use Mouse;
+use namespace::autoclean;
+use Smart::Args;
 
-    bless { furl => $furl, }, shift;
-}
+has silent => (
+    is => 'rw',
+    isa => 'Bool',
+);
+
+has fetcher => (
+    is => 'rw',
+    default => sub {
+        Fetch::WithStatic::Fetcher->new
+    },
+);
 
 sub get {
-    my ($self, $url, $savedir) = @_;
+    args my $self,
+         my $url,
+         my $dir => {optional => 1},
+         my $silent => {default => 1, optional => 1};
 
-    croak "Malformed URL: $url" unless $url =~ m#^https?://#;
-    $url .= '/' unless ($url =~ m#^https?://(.+)#)[0] =~ qr{/};
+    $self->silent($silent);
 
-    my $util = Fetch::WithStatic::Util->conf(savedir => $savedir, url => $url);
+    my $res = $self->fetcher->fetch(url => $url, decode => 1);
+    my $status = $res->{status};
 
-    my $html = $self->fetch($url, decode => 1);
-    my $this = $util->this;
-    say "Saved: " . $this->basename;
+    if ($status =~ /^2/) {
+        my $doc;
+        $doc = Fetch::WithStatic::Doc->new(
+            content => $res->{content},
+            url     => $url,
+            dir     => $dir,
+        );
+        $self->save_statics($doc->download_queue) if $doc->is_html;
 
-    my $doc = Fetch::WithStatic::Doc->new($html, util => $util);
-    $self->save_statics($doc->statics);
-    $self->save($doc->as_HTML, $this, encode => 1);
+        $self->save(
+            content => $doc->as_HTML,
+            file    => $doc->self->{file},
+            encoder => $res->{encoder},
+        );
 
-    say "Success!";
-    say "open '" . $this->stringify . "'";
+        $self->log("Saved: " . $doc->self->{basename});
+        $self->log("Success!", "Open \'" . $doc->self->{path} . "\'");
+    }
+    else {
+        $self->log("Failed: [$status] " . $res->{reason});
+    }
+    return $status;
 }
 
 sub save {
-    my ($self, $content, $file, %opt) = @_;
-    $content = $self->encoder->encode($content) if $opt{encode} && $self->encoder;
+    args my $self,
+         my $content,
+         my $file => 'Path::Class::File',
+         my $encoder => {optional => 1};
 
-    my $writer = $file->openw or croak;
-    $writer->print($content)  or croak;
+    if ($encoder) {
+        $content = $encoder->encode($content)
+    }
+
+    my $writer = $file->openw or croak "Cannot open $file";
+    $writer->print($content)  or croak "Cannot write on $file";
     $writer->close;
 }
 
 sub save_statics {
-    my ($self, $statics) = @_;
+    my ($self, @queue) = @_;
+    my @urls = map { $_->{url} } @queue;
 
-    my @coro;
-    my $semaphore = new Coro::Semaphore 30;
-    for my $url (uniq map { $_->{url} } @{$statics}) {
-        my $static = (grep { $url eq $_->{url} } @{$statics})[0];
-        my $filename = $static->{file}->basename;
-        my $content;
-        my $error = 0;
-
-        push @coro, async {
+    $self->fetcher->fetch_multi(
+        urls => \@urls,
+        on_success => sub {
+            my ($content, $status, $i) = @_;
+            my $static         = $queue[$i];
+            my $path           = $static->{localpath};
+            my $file           = $static->{file};
+            my $content_filter = $static->{content_filter};
+            my $error  = 0;
             try {
-                $content = $self->fetch($url);
+                $self->save(
+                    content => $content_filter ? $content_filter->($content) : $content,
+                    file    => $file,
+                );
             } catch {
-                say "Failed to get: $filename";
+                $self->log("Failed to save $path: $_");
                 $error = 1;
             };
-
-            unless ($error) {
-                try {
-                    $self->save($content, $static->{file});
-                    say "Saved: $filename";
-                } catch {
-                    say "Failed to save: $filename";
-                };
-            }
-        };
-    }
-    $_->join for @coro;
+            $self->log("Saved: " . $path) unless $error;
+        },
+        on_fail => sub {
+            my (undef, $status, $i, $reason) = @_;
+            my $static = $queue[$i];
+            my $path = $static->{localpath};
+            $self->log("Failed to get $path: $reason");
+        },
+    );
 }
 
-sub fetch {
-    my ($self, $url, %opt) = @_;
+use Perl6::Say;
 
-    my $res = $self->furl->get($url);
-    if ($res->code =~ /^2/) {
-        my $content = $res->content;
-
-        if ($opt{decode}) {
-            my $encoder = Encode::Guess->guess($content);
-            if (ref $encoder) {
-                $self->encoder($encoder);
-                return $encoder->decode($content);
-            } else {
-                return $content;
-            }
-        } else {
-            return $content;
-        }
-    } else {
-        croak "Fatal error: [" . $res->status . "] $url";
+sub log {
+    my ($self, @log) = @_;
+    unless ($self->silent) {
+        say $_ for @log;
     }
+
 }
 
 1;
@@ -131,10 +133,21 @@ Fetch::WithStatic -
   my $fetcher = Fetch::WithStatic->new;
 
   # save to your current dir
-  $fetcher->get($url);
+  $fetcher->get(
+      url => $url
+  );
 
   # save to a optional dir
-  $fetcher->get($url, '/path/to/dir');
+  $fetcher->get(
+      url => $url,
+      dir => '/path/to/dir'
+  );
+
+  # view log
+  $fetcher->get(
+      url => $url,
+      sirent => 0,
+  );
 
 =head1 DESCRIPTION
 
