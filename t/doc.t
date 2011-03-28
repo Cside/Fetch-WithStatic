@@ -55,7 +55,7 @@ subtest "as_html" => sub {
         my $selector  = $args{selector};
         my $attr_name = $args{attr_name};
 
-        for my $elem (grep { $_->attr('fixed') == 1 } $tree->select($selector)) {
+        for my $elem (grep { $_->attr('fixed') } $tree->select($selector)) {
 	        local $Test::Builder::Level = $Test::Builder::Level + 1;
             my $path = $elem->attr($attr_name);
             if ($name eq 'a') {
