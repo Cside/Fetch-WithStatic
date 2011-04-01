@@ -56,7 +56,7 @@ sub url_to_basename {
         pop @segments;
     };
     $basename = 'index.html' if ! $basename;
-    $basename .= '.html' unless $basename =~ /\.(html|htm)$/;
+    $basename .= '.html' unless $basename =~ /\.(html|htm)$/io;
     $basename;
 }
 
@@ -86,13 +86,13 @@ sub originpath_to_url {
 
     };
 
-    if ($path =~ m#^https?://#) {
+    if ($path =~ m#^https?://#o) {
         return $path;
     }
-    elsif ($path =~ m#^/#) {
+    elsif ($path =~ m#^/#o) {
         return $root->($url) . $path;
     }
-    elsif ($path =~ m#^[^/]#) {
+    elsif ($path =~ m#^[^/]#o) {
         return $dir->($url) . '/' . $path;
     }
 }
@@ -101,7 +101,7 @@ sub originpath_to_localpath {
     args_pos my $self,
              my $path;
     my $url = $self->originpath_to_url($path);
-    my @dir = split '/', ($url =~ (m#https?://([^?]+)#))[0];
+    my @dir = split '/', ($url =~ (m#https?://([^?]+)#o))[0];
     File::Spec->catfile('static', @dir);
 }
 

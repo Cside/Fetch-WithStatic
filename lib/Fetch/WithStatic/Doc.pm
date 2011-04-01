@@ -18,18 +18,45 @@ use Fetch::WithStatic::Types qw/HTTP_URL/;
 has content => (
     is => 'rw',
     isa => 'Str',
-    required => 1
+    required => 1,
+    trigger => \&on_set_content,
 );
 
 has url => (
     is => 'rw',
     isa => HTTP_URL,
-    required => 1
+    required => 1,
 );
 
 has dir => (
     is => 'rw',
-    required => 1
+    required => 1,
+);
+
+sub on_set_content {
+    my ($self, $content) = @_;
+
+    if ($content =~ /<html/io) {
+        $self->is_html(1);
+
+        my $tree = parse_html($self->content);
+        $self->tree($tree);
+        $self->content('');
+
+        $self->set(name => 'a',   selector => 'a',      attr_name => 'href');
+        $self->set(name => 'css', selector => 'link',   attr_name => 'href');
+        $self->set(name => 'img', selector => 'img',    attr_name => 'src');
+        $self->set(name => 'js',  selector => 'script', attr_name => 'src');
+    }
+}
+
+has is_html => (
+    is => 'rw',
+);
+
+has tree => (
+    is => 'rw',
+    isa => 'Maybe[Object]',
 );
 
 has util => (
@@ -43,33 +70,6 @@ sub _build_util {
         url => $self->url,
         dir => $self->dir,
     );
-}
-
-has tree => (
-    is => 'rw',
-    isa => 'Maybe[Object]',
-);
-
-has is_html => (
-    is => 'rw',
-);
-
-sub BUILD {
-    my ($self) = @_;
-
-    my $html = $self->content;
-    if ($html =~ /<html/i) {
-        $self->is_html(1);
-
-        my $tree = parse_html($self->content);
-        $self->tree($tree);
-        $self->content('');
-
-        $self->set(name => 'a',   selector => 'a',      attr_name => 'href');
-        $self->set(name => 'css', selector => 'link',   attr_name => 'href');
-        $self->set(name => 'img', selector => 'img',    attr_name => 'src');
-        $self->set(name => 'js',  selector => 'script', attr_name => 'src');
-    }
 }
 
 # Public API
@@ -87,8 +87,14 @@ has 'download_queue' => (
 
 sub as_HTML {
     my ($self) = @_;
-    $self->is_html ? $self->tree->as_HTML
-                   : $self->content;
+    if ($self->is_html) {
+        my $html = $self->tree->as_HTML;
+        $self->tree->delete;
+        $html;
+
+    } else {
+        $self->content;
+    }
 }
 
 sub self {
@@ -124,14 +130,14 @@ sub set {
             next unless ($rel eq 'stylesheet' || $type eq 'text/css' || $path =~ /\.css$/);
         }
 
-        if ($name =~ /(?:css|img|js)/) {
+        if ($name =~ /(?:css|img|js)/o) {
             return if in($url, @already);
             push @already, $url;
             $self->add_download_queue({
                 file           => $file,
                 url            => $url,
                 localpath      => $localpath,
-                content_filter => ($path =~ m#^https?://gist\.github\.com/#)
+                content_filter => ($path =~ m#^https?://gist\.github\.com/#o)
                                   ? \&fix_gist_content : undef,
             });
         }
@@ -165,11 +171,11 @@ sub fix_gist_content {
     } catch {
         croak "Cannot open gist.css: " . $_;
     };
-    $gist_css =~ s/(\n|\s{2,})//g;
-    $gist_css =~ s/'/\\'/g;
+    $gist_css =~ s/(\n|\s{2,})//go;
+    $gist_css =~ s/'/\\'/go;
     $gist_css = '<style>' . $gist_css. '</style>';
 
-    $gist_content =~ s#document\.write\((.+?)\)#document.write('$gist_css')#;
+    $gist_content =~ s#document\.write\((.+?)\)#document.write('$gist_css')#o;
     $gist_content;
 }
 
