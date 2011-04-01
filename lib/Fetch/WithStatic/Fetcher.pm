@@ -7,34 +7,35 @@ use Try::Tiny;
 
 use Smart::Args;
 
+use Try::Tiny;
 use Encode::Guess qw/ascii utf8 euc-jp shiftjis 7bit-jis/;
 use Fetch::WithStatic::Types qw/HTTP_URL/;
 
-use AnyEvent::HTTP;
+use Furl;
 use Coro;
 use Coro::LWP;
-use Coro::AnyEvent;
+use Coro::Select;
 use Coro::Semaphore;
 
-sub new { bless {}, shift; }
+sub new {
+    my $furl = Furl->new(
+        agent => 'Fetch::WithStatic',
+        timeout => 30,
+    );
+    bless {furl => $furl}, shift;
+}
 
 sub fetch {
     args my $self,
          my $url => HTTP_URL,
          my $decode => {optional => 1};
 
-    http_request(
-        GET => $url,
-        headers => { "user-agent" => "Fetch::WithStatic" },
-        timeout => 30,
-        Coro::rouse_cb,
-    );
-    my ($body, $header) = Coro::rouse_wait;
-    my $status = $header->{Status};
+    my $res = $self->{furl}->get($url);
+    my $status = $res->status;
+    my $result = {status => $res->is_success ? 200 : $status};
 
-    my $result = {status => $status};
-    if ($status =~ /^2/) {
-        my $encoer;
+    if ($res->is_success) {
+        my $body = $res->content;
 
         if ($decode) {
             my $encoder = Encode::Guess->guess($body);
@@ -47,8 +48,9 @@ sub fetch {
         $result->{content} = $body;
     }
     else {
-        $result->{reason} = $header->{Reason};
+        $result->{reason} = $res->status_line;
     }
+
     return $result;
 }
 
@@ -68,12 +70,32 @@ sub fetch_multi {
             my $url = $queue->{url};
             my $i   = $queue->{i};
             my $guard = $semaphore->guard;
-            my $res = $self->fetch(url => $url, decode => $decode);
+            my $res;
+            my $error;
+            my $retried_500;
 
-            if ($res->{status} =~ /^2/) {
-                $on_success->($res->{content}, $res->{status}, $i);
-            } else {
-                $on_fail->(undef, $res->{status}, $i, $res->{reason});
+            FETCH: {
+                try {
+                    $res = $self->fetch(url => $url, decode => $decode);
+                } catch {
+                    $error = $_;
+                };
+
+                if ($error) {
+                    $on_fail->(undef, 404, $i, $error);
+                }
+                elsif ($res->{status} =~ /^2/o) {
+                    $on_success->($res->{content}, $res->{status}, $i);
+                }
+                else {
+                    if ($res->{status} eq '500') {
+                        unless ($retried_500) {
+                            $retried_500 = 1;
+                            goto FETCH;
+                        }
+                    }
+                    $on_fail->(undef, $res->{status}, $i, $res->{reason});
+                }
             }
         };
     }
